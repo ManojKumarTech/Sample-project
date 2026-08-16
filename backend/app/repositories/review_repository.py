@@ -71,7 +71,7 @@ class ReviewRepository:
 
         total = query.count()
         items = (
-            query.order_by(Review.review_date.desc().nullslast(), Review.id.desc())
+            query.order_by(Review.review_date.desc(), Review.id.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
             .all()
@@ -83,7 +83,7 @@ class ReviewRepository:
             self.db.query(Review)
             .options(joinedload(Review.analysis))
             .filter(Review.app_id == app_id)
-            .order_by(Review.review_date.desc().nullslast())
+            .order_by(Review.review_date.desc(), Review.id.desc())
             .all()
         )
 
@@ -94,7 +94,7 @@ class ReviewRepository:
             .join(App, Review.app_id == App.id)
             .options(joinedload(Review.analysis))
             .filter(App.organization_id == org_id)
-            .order_by(Review.review_date.desc().nullslast())
+            .order_by(Review.review_date.desc(), Review.id.desc())
             .all()
         )
 
