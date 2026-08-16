@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 from collections import defaultdict
 from backend.app.models.review import Review
 
-
+# Domain keyword taxonomy mapping functional application subsystems to regex keywords
 THEME_KEYWORDS = {
     "Login & Auth": [
         "login", "log in", "sign in", "signin", "password", "2fa", "otp", "code",
@@ -48,10 +48,22 @@ THEME_KEYWORDS = {
 
 
 class ThemeService:
-    """Service to detect recurring themes and topics from reviews."""
+    """
+    Service Layer: Extracts recurring topics and functional friction/praise clusters from reviews.
+    Correlates keyword occurrences with user sentiment to determine whether a theme is an issue or a praise driver.
+    """
 
     def extract_themes(self, reviews: List[Review]) -> List[Dict[str, Any]]:
-        """Extract and categorize themes across a list of reviews with sentiment weighting."""
+        """
+        Extract and categorize themes across a list of reviews with sentiment weighting.
+        
+        Args:
+            reviews: List of Review model instances with associated sentiment analysis.
+            
+        Returns:
+            List of theme objects containing theme_name, theme_type (POSITIVE/NEGATIVE/GENERAL),
+            review_count, percentage of total reviews, and sentiment label.
+        """
         if not reviews:
             return []
 
@@ -59,6 +71,7 @@ class ThemeService:
         theme_counts = defaultdict(int)
         theme_sentiments = defaultdict(list)
 
+        # Iterate over all reviews to identify keyword matches
         for review in reviews:
             text = (review.review_text or "").lower()
             analysis = review.analysis
@@ -75,13 +88,14 @@ class ThemeService:
                     theme_counts[theme_name] += 1
                     theme_sentiments[theme_name].append((sentiment_score, sentiment_label))
 
+        # Compute percentage impact and aggregate sentiment per theme
         results = []
         for theme_name, count in theme_counts.items():
             pct = round((count / total_reviews) * 100, 1)
             sentiments = theme_sentiments[theme_name]
             avg_score = sum(s[0] for s in sentiments) / len(sentiments) if sentiments else 0.0
             
-            # Determine overall theme sentiment
+            # Determine overall theme sentiment orientation
             if avg_score >= 0.1:
                 theme_type = "POSITIVE"
                 sentiment_str = "POSITIVE"
@@ -100,6 +114,6 @@ class ThemeService:
                 "sentiment": sentiment_str,
             })
 
-        # Sort by review count descending
+        # Sort themes by review count descending (highest impact first)
         results.sort(key=lambda x: x["review_count"], reverse=True)
         return results

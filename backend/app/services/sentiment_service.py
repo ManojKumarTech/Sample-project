@@ -7,24 +7,31 @@ from backend.app.repositories.review_repository import ReviewRepository
 
 
 class SentimentAnalyzer(ABC):
-    """Abstract Strategy interface for Sentiment Analysis."""
+    """
+    Abstract Strategy Pattern: Defines the contract for all sentiment analysis implementations.
+    Allows seamlessly swapping VADER with RoBERTa, DistilBERT, Claude API, or OpenAI models.
+    """
 
     @abstractmethod
     def analyze(self, text: str) -> Dict[str, Any]:
-        """Analyze sentiment of text.
+        """
+        Analyzes the emotional polarity of text.
         
         Returns:
-        {
-            "sentiment": "POSITIVE" | "NEUTRAL" | "NEGATIVE",
-            "sentiment_score": float (-1.0 to 1.0),
-            "confidence": float (0.0 to 1.0)
-        }
+            Dict containing:
+                "sentiment": "POSITIVE" | "NEUTRAL" | "NEGATIVE",
+                "sentiment_score": float between -1.0 and +1.0,
+                "confidence": float between 0.0 and 1.0
         """
         pass
 
 
 class VaderSentimentAnalyzer(SentimentAnalyzer):
-    """VADER sentiment analyzer implementation."""
+    """
+    Concrete Strategy: Uses VADER (Valence Aware Dictionary and sEntiment Reasoner).
+    Optimized for short-form social media & app store review language, accounting for
+    emojis, capitalization emphasis, punctuation, and negation words.
+    """
 
     def __init__(self):
         self.analyzer = SentimentIntensityAnalyzer()
@@ -37,10 +44,14 @@ class VaderSentimentAnalyzer(SentimentAnalyzer):
                 "confidence": 0.5,
             }
 
+        # VADER returns polarity dict: {'neg': float, 'neu': float, 'pos': float, 'compound': float}
         scores = self.analyzer.polarity_scores(text)
         compound = scores["compound"]
 
-        # Classification thresholds
+        # Polarity classification boundaries:
+        # compound >= +0.05 -> POSITIVE
+        # compound <= -0.05 -> NEGATIVE
+        # between -0.05 and +0.05 -> NEUTRAL
         if compound >= 0.05:
             sentiment = "POSITIVE"
             confidence = min(0.99, max(0.6, 0.5 + abs(compound) * 0.5))
@@ -59,17 +70,24 @@ class VaderSentimentAnalyzer(SentimentAnalyzer):
 
 
 class SentimentService:
-    """Service for managing review sentiment analysis pipeline."""
+    """
+    Service Layer: Manages the batch sentiment processing pipeline for stored reviews.
+    """
 
     def __init__(self, review_repo: ReviewRepository, analyzer: SentimentAnalyzer = None):
+        """Initializes service with injected review repository and sentiment strategy."""
         self.review_repo = review_repo
         self.analyzer = analyzer or VaderSentimentAnalyzer()
 
     def analyze_review_text(self, text: str) -> Dict[str, Any]:
+        """Direct analysis utility for arbitrary text strings."""
         return self.analyzer.analyze(text)
 
     def analyze_pending_reviews(self, limit: int = 500) -> int:
-        """Analyze all unanalyzed reviews in the database."""
+        """
+        Queries all reviews in MySQL that lack an entry in `review_analysis`,
+        processes their text through the sentiment analyzer, and saves analysis records.
+        """
         unanalyzed = self.review_repo.get_unanalyzed_reviews(limit=limit)
         analyzed_count = 0
         for review in unanalyzed:

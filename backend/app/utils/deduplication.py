@@ -3,13 +3,19 @@ from typing import List, Dict, Any
 
 
 def generate_review_hash(author: str, text: str, date_str: str) -> str:
-    """Generate deterministic hash for review deduplication when no ID is provided."""
+    """
+    Generates a deterministic 32-character SHA-256 hash representing a review
+    when the external store does not supply an explicit numeric or GUID identifier.
+    """
     payload = f"{author}_{text}_{date_str}".encode("utf-8")
     return hashlib.sha256(payload).hexdigest()[:32]
 
 
 def deduplicate_reviews(reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Deduplicate in-memory review objects by external_review_id."""
+    """
+    In-Memory Deduplication: Filters an incoming batch of reviews by external_review_id,
+    guaranteeing that multiple occurrences within a single store feed are collapsed to one.
+    """
     seen_ids = set()
     unique_reviews = []
     for r in reviews:
@@ -29,7 +35,10 @@ def deduplicate_reviews(reviews: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 
 def deduplicate_apps(apps: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """Deduplicate discovered apps by platform + store_id / package_name."""
+    """
+    Deduplicates discovered applications across stores using composite key:
+    `platform:app_store_id` (Apple) or `platform:package_name` (Google Play).
+    """
     seen = set()
     unique_apps = []
     for app in apps:

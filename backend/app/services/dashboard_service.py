@@ -23,7 +23,10 @@ from backend.app.schemas.review import ReviewResponse
 
 
 class DashboardService:
-    """Service to aggregate metrics and generate executive dashboards and actionable insights."""
+    """
+    Service Layer: Synthesizes high-level executive metrics, cross-application matrices,
+    historical timeline trends, and heuristic Actionable AI Insights for decision-makers.
+    """
 
     def __init__(
         self,
@@ -40,6 +43,14 @@ class DashboardService:
         self.theme_service = theme_service
 
     def get_organization_dashboard(self, org_id: int) -> OrganizationDashboardResponse:
+        """
+        Builds the complete organization-level dashboard:
+        - Global statistics (Total apps, Total reviews, Average rating, Positive/Neutral/Negative split).
+        - App-by-App comparison table.
+        - Recurring theme strengths & issues across the enterprise.
+        - Historical sentiment & rating progression timeline.
+        - Automated actionable insights.
+        """
         org = self.org_repo.get_by_id(org_id)
         if not org:
             raise ValueError(f"Organization with ID {org_id} not found.")
@@ -50,7 +61,7 @@ class DashboardService:
         total_apps = len(apps)
         total_reviews = len(all_reviews)
 
-        # Aggregate stats
+        # 1. Compute aggregate ratings and sentiment counts
         total_rating_sum = sum(r.rating for r in all_reviews) if all_reviews else 0
         avg_rating = round(total_rating_sum / total_reviews, 2) if total_reviews else 0.0
 
@@ -64,7 +75,7 @@ class DashboardService:
         neu_pct = round((neu_count / total_reviews) * 100, 1) if total_reviews else 0.0
         neg_pct = round((neg_count / total_reviews) * 100, 1) if total_reviews else 0.0
 
-        # App comparison table
+        # 2. Build the Cross-App comparison matrix
         apps_comparison = []
         for app in apps:
             app_reviews = [r for r in all_reviews if r.app_id == app.id]
@@ -90,15 +101,15 @@ class DashboardService:
                 "store_url": app.store_url,
             })
 
-        # Overall themes
+        # 3. Categorize overall organizational themes
         all_themes = self.theme_service.extract_themes(all_reviews)
         top_pos_themes = [AppThemeResponse(**t) for t in all_themes if t["theme_type"] == "POSITIVE"][:5]
         top_neg_themes = [AppThemeResponse(**t) for t in all_themes if t["theme_type"] == "NEGATIVE"][:5]
 
-        # Trends over time
+        # 4. Generate trend points for timeline graphs
         trends = self._calculate_trends(all_reviews)
 
-        # Actionable insights
+        # 5. Synthesize rule-based actionable insights
         insights = self._generate_insights(apps, all_reviews, all_themes)
 
         return OrganizationDashboardResponse(
@@ -119,6 +130,14 @@ class DashboardService:
         )
 
     def get_app_dashboard(self, app_id: int) -> AppDashboardResponse:
+        """
+        Builds the single-app intelligence dashboard:
+        - App metadata and rating breakdown.
+        - Sentiment polarity distribution.
+        - Top positive and negative friction themes.
+        - Side-by-side iOS vs Android platform comparison.
+        - Recent customer feedback preview.
+        """
         app = self.app_repo.get_by_id(app_id)
         if not app:
             raise ValueError(f"App with ID {app_id} not found.")
@@ -163,21 +182,21 @@ class DashboardService:
             "score": avg_sentiment,
         }
 
-        # Themes
+        # Extract app themes
         themes = self.theme_service.extract_themes(reviews)
         top_pos = [AppThemeResponse(**t) for t in themes if t["theme_type"] == "POSITIVE"][:5]
         top_neg = [AppThemeResponse(**t) for t in themes if t["theme_type"] == "NEGATIVE"][:5]
 
-        # Trends
+        # Generate timeline trends
         trends = self._calculate_trends(reviews)
 
-        # Recent reviews (last 10)
+        # Slice recent 10 reviews
         recent = [ReviewResponse.model_validate(r) for r in reviews[:10]]
 
-        # Platform comparison (find sibling app on other platform with matching name)
+        # Correlate opposite platform sibling (iOS vs Android)
         platform_comparison = self._get_platform_comparison(app)
 
-        # Insights
+        # Generate app-specific insights
         insights = self._generate_insights([app], reviews, themes)
 
         return AppDashboardResponse(
@@ -193,11 +212,10 @@ class DashboardService:
         )
 
     def _get_platform_comparison(self, current_app: App) -> List[PlatformComparisonItem]:
-        """Compare this app with corresponding sibling app on the opposite platform."""
+        """Matches title with opposite platform sibling for direct comparison."""
         siblings = self.app_repo.get_by_organization(current_app.organization_id)
         results = []
 
-        # Find apps matching similar name
         base_name = current_app.name.split()[0].lower()
         matched_apps = [a for a in siblings if base_name in a.name.lower()]
         if not matched_apps:
@@ -230,9 +248,8 @@ class DashboardService:
         return results
 
     def _calculate_trends(self, reviews: List[Review]) -> List[TrendPoint]:
-        """Aggregate review sentiment and rating into monthly / weekly timeline."""
+        """Aggregates review sentiment and rating into a chronological timeline series."""
         if not reviews:
-            # Generate sample trend curve for demonstration
             return [
                 TrendPoint(date="Month 1", sentiment_score=0.42, average_rating=4.3, review_count=45, positive_count=32, neutral_count=8, negative_count=5),
                 TrendPoint(date="Month 2", sentiment_score=0.38, average_rating=4.1, review_count=60, positive_count=38, neutral_count=12, negative_count=10),
@@ -241,7 +258,6 @@ class DashboardService:
                 TrendPoint(date="Month 5", sentiment_score=0.48, average_rating=4.4, review_count=110, positive_count=80, neutral_count=15, negative_count=15),
             ]
 
-        # Group by Year-Month or Date
         buckets = defaultdict(list)
         for r in reviews:
             date_key = r.review_date.strftime("%Y-%m-%d") if r.review_date else datetime.utcnow().strftime("%Y-%m-%d")
@@ -270,7 +286,10 @@ class DashboardService:
         return trend_points
 
     def _generate_insights(self, apps: List[App], reviews: List[Review], themes: List[Dict[str, Any]]) -> List[ActionableInsight]:
-        """Generate rule-based actionable insights based on reviews, platforms, and theme distributions."""
+        """
+        Actionable AI Insights Engine: Evaluates heuristic decision trees across
+        sentiment ratios, topic frequencies, and cross-platform variances.
+        """
         insights = []
 
         if not reviews:
@@ -289,7 +308,7 @@ class DashboardService:
         neg_reviews = [r for r in reviews if r.analysis and r.analysis.sentiment == "NEGATIVE"]
         neg_pct = round((len(neg_reviews) / total) * 100, 1)
 
-        # 1. Negative Sentiment Spikes
+        # Rule 1: Negative Sentiment Spike Threshold (> 25% negative reviews)
         if neg_pct > 25:
             insights.append(ActionableInsight(
                 id="ins_neg_spike",
@@ -300,7 +319,7 @@ class DashboardService:
                 recommendation="Investigate the latest app release changelog and address top crash/login complaints immediately.",
             ))
 
-        # 2. Top Complaint Theme Analysis
+        # Rule 2: Lead Friction Driver Identification
         top_neg_themes = [t for t in themes if t["theme_type"] == "NEGATIVE"]
         if top_neg_themes:
             lead_issue = top_neg_themes[0]
@@ -313,7 +332,7 @@ class DashboardService:
                 recommendation=f"Assign dedicated engineering sprint to resolve root causes in {lead_issue['theme_name']}.",
             ))
 
-        # 3. Cross-Platform Discrepancy
+        # Rule 3: Cross-Platform Disparity (Google Play vs Apple App Store)
         apple_reviews = [r for r in reviews if r.app and r.app.platform == "APPLE"]
         play_reviews = [r for r in reviews if r.app and r.app.platform == "GOOGLE_PLAY"]
         if apple_reviews and play_reviews:
@@ -339,7 +358,7 @@ class DashboardService:
                     recommendation="Check recent iOS build compatibility and App Store subscription flow.",
                 ))
 
-        # 4. Top Praise / Positive Driver
+        # Rule 4: Top Praise / Strength Driver
         top_pos_themes = [t for t in themes if t["theme_type"] == "POSITIVE"]
         if top_pos_themes:
             lead_pos = top_pos_themes[0]

@@ -4,13 +4,20 @@ from typing import Optional
 
 
 def normalize_organization_name(name: str) -> str:
-    """Normalize organization name for matching and deduplication.
+    """
+    Normalizes an organization or enterprise name into a standardized search token.
+    
+    Processing Steps:
+    1. Unicode NFKD normalization (converts accented characters).
+    2. Lowercase transformation.
+    3. Strips corporate legal suffixes (e.g., 'Platforms', 'Inc', 'LLC', 'Corp', 'GmbH', 'Ltd').
+    4. Removes non-alphanumeric punctuation.
+    5. Normalizes whitespace to a clean single space.
     
     Examples:
-    'Meta Platforms, Inc.' -> 'meta'
-    'Google LLC' -> 'google'
-    'Spotify AB' -> 'spotify'
-    '  Microsoft Corporation  ' -> 'microsoft'
+        'Meta Platforms, Inc.' -> 'meta'
+        'Google LLC'           -> 'google'
+        'Spotify AB'           -> 'spotify'
     """
     if not name:
         return ""
@@ -18,7 +25,7 @@ def normalize_organization_name(name: str) -> str:
     # Convert to lowercase and normalize unicode
     text = unicodedata.normalize("NFKD", name).lower()
 
-    # Remove common business suffixes
+    # List of common international legal suffixes to strip
     suffixes = [
         r"\bplatforms\b",
         r"\btechnologies\b",
@@ -55,19 +62,28 @@ def normalize_organization_name(name: str) -> str:
 
 
 def clean_text(text: Optional[str]) -> str:
-    """Clean user review text or titles."""
+    """
+    Sanitizes raw user-generated review text.
+    Removes carriage returns, excessive whitespaces, and normalizes unicode characters (NFKC).
+    """
     if not text:
         return ""
-    # Normalize unicode
     text = unicodedata.normalize("NFKC", text)
-    # Strip excessive newlines and spaces
     text = re.sub(r"\r\n|\r|\n", " ", text)
     text = re.sub(r"\s+", " ", text)
     return text.strip()
 
 
 def calculate_match_confidence(org_name: str, developer_name: Optional[str], app_name: Optional[str] = None) -> str:
-    """Calculate confidence level (HIGH, MEDIUM, LOW) that a developer matches an organization."""
+    """
+    Confidence Matching Algorithm:
+    Evaluates the probability that an app store developer identity belongs to the queried organization.
+    
+    Returns:
+        'HIGH'   - Exact normalized match, verified corporate alias, or strong substring match.
+        'MEDIUM' - Token intersection between organization words and publisher name.
+        'LOW'    - Minimal or zero correlation (discarded from automated discovery).
+    """
     if not developer_name:
         return "LOW"
 
@@ -77,11 +93,11 @@ def calculate_match_confidence(org_name: str, developer_name: Optional[str], app
     if not norm_org or not norm_dev:
         return "LOW"
 
-    # Exact normalized match
+    # 1. Exact normalized match (e.g. 'google' == 'google')
     if norm_org == norm_dev:
         return "HIGH"
 
-    # Known parent-child mappings
+    # 2. Known corporate parent-subsidiary alias mappings
     org_aliases = {
         "meta": ["meta platforms", "facebook", "instagram", "whatsapp", "meta apps"],
         "google": ["google llc", "google inc", "google commerce ltd", "google ireland"],
@@ -102,11 +118,11 @@ def calculate_match_confidence(org_name: str, developer_name: Optional[str], app
         if normalize_organization_name(alias) in norm_dev or norm_dev in normalize_organization_name(alias):
             return "HIGH"
 
-    # Substring match
+    # 3. Substring containment match
     if norm_org in norm_dev or norm_dev in norm_org:
         return "HIGH"
 
-    # Word intersection match
+    # 4. Token set intersection
     org_words = set(norm_org.split())
     dev_words = set(norm_dev.split())
     if org_words.intersection(dev_words):
